@@ -12,9 +12,17 @@ export type AnimeEpisode = {
   number: string;
 };
 
+export type AnimeStreamSource = {
+  url: string;
+  quality: string | null;
+  source: string | null;
+  type: string | null;
+};
+
 export const API = {
   getHealth: async () => {
     const response = await fetch(`${API_BASE_URL}/health`);
+
     if (!response.ok) {
       throw new Error("Failed to fetch health");
     }
@@ -33,6 +41,7 @@ export const API = {
 
     return response.json();
   },
+
   getEpisodes: async (
     animeId: string,
     translationType: "sub" | "dub" = "sub",
@@ -45,6 +54,24 @@ export const API = {
 
     if (!response.ok) {
       throw new Error("Failed to fetch episodes");
+    }
+
+    return response.json();
+  },
+
+  getStreams: async (
+    animeId: string,
+    episodeNumber: string,
+    translationType: "sub" | "dub" = "sub",
+  ): Promise<AnimeStreamSource[]> => {
+    const params = new URLSearchParams({ translation_type: translationType });
+
+    const response = await fetch(
+      `${API_BASE_URL}/anime/${animeId}/episodes/${episodeNumber}/stream?${params.toString()}`,
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch stream sources");
     }
 
     return response.json();

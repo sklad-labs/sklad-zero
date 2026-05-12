@@ -8,6 +8,8 @@ from Crypto.Cipher import AES
 from app.schemas.anime import AnimeEpisode, AnimeSearchResult, AnimeStreamSource
 from app.scrapers.base import AnimeScraper
 
+_BLOCKED_SOURCE_NAMES = {"Vid-mp4"}
+
 
 class AllAnimeScraper(AnimeScraper):
     def __init__(self) -> None:
@@ -214,11 +216,14 @@ class AllAnimeScraper(AnimeScraper):
             source_url = source.get("sourceUrl")
             source_name = source.get("sourceName")
 
-            if not source_url:
+            if not source_url or source_name in _BLOCKED_SOURCE_NAMES:
                 continue
 
             if source_url.startswith("--"):
                 source_url = self._decode_xor_url(source_url[2:])
+
+            if source_url.startswith("/"):
+                continue
 
             results.append(
                 AnimeStreamSource(

@@ -2,7 +2,12 @@
 
 import type React from "react";
 import { useState } from "react";
-import { API, type AnimeEpisode, type AnimeSearchResult } from "@/lib/api";
+import {
+  API,
+  type AnimeEpisode,
+  type AnimeSearchResult,
+  type AnimeStreamSource,
+} from "@/lib/api";
 
 export default function Home() {
   const [query, setQuery] = useState("");
@@ -11,9 +16,16 @@ export default function Home() {
     null,
   );
   const [episodes, setEpisodes] = useState<AnimeEpisode[]>([]);
+  const [selectedEpisode, setSelectedEpisode] = useState<AnimeEpisode | null>(
+    null,
+  );
+  const [streams, setStreams] = useState<AnimeStreamSource[]>([]);
+  const [selectedStream, setSelectedStream] =
+    useState<AnimeStreamSource | null>(null);
 
   const [searchLoading, setSearchLoading] = useState(false);
   const [episodesLoading, setEpisodesLoading] = useState(false);
+  const [streamsLoading, setStreamsLoading] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +42,9 @@ export default function Home() {
     setError(null);
     setSelectedAnime(null);
     setEpisodes([]);
+    setSelectedEpisode(null);
+    setStreams([]);
+    setSelectedStream(null);
 
     try {
       const data = await API.searchAnime(trimmedQuery);
@@ -45,13 +60,20 @@ export default function Home() {
     if (selectedAnime?.id === anime.id) {
       setSelectedAnime(null);
       setEpisodes([]);
+      setSelectedEpisode(null);
+      setStreams([]);
+      setSelectedStream(null);
       setEpisodesLoading(false);
+      setStreamsLoading(false);
       setError(null);
       return;
     }
 
     setSelectedAnime(anime);
     setEpisodes([]);
+    setSelectedEpisode(null);
+    setStreams([]);
+    setSelectedStream(null);
     setEpisodesLoading(true);
     setError(null);
 
@@ -65,13 +87,46 @@ export default function Home() {
     }
   }
 
+  async function handleSelectEpisode(episode: AnimeEpisode) {
+    if (!selectedAnime) {
+      return;
+    }
+
+    if (selectedEpisode?.number === episode.number) {
+      setSelectedEpisode(null);
+      setStreams([]);
+      setSelectedStream(null);
+      setStreamsLoading(false);
+      setError(null);
+      return;
+    }
+
+    setSelectedEpisode(episode);
+    setStreams([]);
+    setSelectedStream(null);
+    setStreamsLoading(true);
+    setError(null);
+
+    try {
+      const data = await API.getStreams(selectedAnime.id, episode.number);
+      setStreams(data);
+      setSelectedStream(data[0] ?? null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load stream sources",
+      );
+    } finally {
+      setStreamsLoading(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-zinc-950 p-8 text-zinc-100">
-      <section className="mx-auto max-w-3xl">
+      <section className="mx-auto max-w-4xl">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Sklad Zero</h1>
           <p className="mt-2 text-zinc-400">
-            Search anime and load available episodes from the backend API.
+            Search anime, pick an episode, and open a stream provider.
           </p>
         </div>
 
@@ -157,16 +212,103 @@ export default function Home() {
 
                     {episodes.length > 0 && (
                       <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
-                        {episodes.map((episode) => (
-                          <button
-                            key={episode.number}
-                            type="button"
-                            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-800"
-                          >
-                            {episode.number}
-                          </button>
-                        ))}
+                        {episodes.map((episode) => {
+                          const isEpisodeSelected =
+                            selectedEpisode?.number === episode.number;
+
+                          return (
+                            <button
+                              key={episode.number}
+                              type="button"
+                              onClick={() => handleSelectEpisode(episode)}
+                              className={`rounded-lg border px-3 py-2 text-sm transition ${
+                                isEpisodeSelected
+                                  ? "border-zinc-300 bg-zinc-700 text-zinc-50"
+                                  : "border-zinc-700 bg-zinc-950 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800"
+                              }`}
+                            >
+                              {episode.number}
+                            </button>
+                          );
+                        })}
                       </div>
+                    )}
+
+                    {selectedEpisode && (
+                      <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <h4 className="font-semibold text-zinc-100">
+                              Episode {selectedEpisode.number}
+                            </h4>
+                            <p className="mt-1 text-sm text-zinc-400">
+                              Choose a stream provider
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedEpisode(null);
+                              setStreams([]);
+                              setSelectedStream(null);
+                            }}
+                            className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-300 transition hover:bg-zinc-800"
+                          >
+                            Close
+                          </button>
+                        </div>
+
+                        {streamsLoading && (
+                          <p className="mt-4 text-sm text-zinc-400">
+                            Loading stream sources...
+                          </p>
+                        )}
+
+                        {!streamsLoading && streams.length === 0 && (
+                          <p className="mt-4 text-sm text-zinc-400">
+                            No stream sources found.
+                          </p>
+                        )}
+
+                        {streams.length > 0 && (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {streams.map((stream) => {
+                              const isStreamSelected =
+                                selectedStream?.url === stream.url;
+
+                              return (
+                                <button
+                                  key={`${stream.source}-${stream.url}`}
+                                  type="button"
+                                  onClick={() => setSelectedStream(stream)}
+                                  className={`rounded-lg border px-3 py-2 text-sm transition ${
+                                    isStreamSelected
+                                      ? "border-zinc-300 bg-zinc-700 text-zinc-50"
+                                      : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800"
+                                  }`}
+                                >
+                                  {stream.source ?? "Unknown"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {selectedStream && (
+                          <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800 bg-black">
+                            <iframe
+                              key={selectedStream.url}
+                              src={selectedStream.url}
+                              title={`${selectedAnime.title} episode ${selectedEpisode.number}`}
+                              className="aspect-video w-full"
+                              allow="fullscreen; autoplay; encrypted-media; picture-in-picture"
+                              allowFullScreen
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        )}
+                      </section>
                     )}
                   </section>
                 )}
