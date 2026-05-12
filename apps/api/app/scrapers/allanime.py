@@ -8,7 +8,16 @@ from Crypto.Cipher import AES
 from app.schemas.anime import AnimeEpisode, AnimeSearchResult, AnimeStreamSource
 from app.scrapers.base import AnimeScraper
 
-_BLOCKED_SOURCE_NAMES = {"Vid-mp4"}
+_BLOCKED_SOURCE_NAMES = {"Yt-mp4","Ss-Hls","Sl-mp4","Vid-mp4","Mp4"}
+
+_SOURCE_PRIORITY = {
+    "Ok": 100,
+    "Fm-Hls": 90,
+    "Default": 80,
+    "S-mp4": 70,
+    "Luf-Mp4": 60,
+    "Uv-mp4": 50,
+}
 
 
 class AllAnimeScraper(AnimeScraper):
@@ -166,7 +175,9 @@ class AllAnimeScraper(AnimeScraper):
 
         tobeparsed = data.get("data", {}).get("tobeparsed")
         if tobeparsed:
-            return self._parse_stream_response({"data": self._decrypt_tobeparsed(tobeparsed)})
+            return self._parse_stream_response(
+                {"data": self._decrypt_tobeparsed(tobeparsed)}
+            )
 
         if self._has_stream_data(data):
             return self._parse_stream_response(data)
@@ -222,7 +233,7 @@ class AllAnimeScraper(AnimeScraper):
             if source_url.startswith("--"):
                 source_url = self._decode_xor_url(source_url[2:])
 
-            if source_url.startswith("/"):
+            if not self._is_probably_playable_url(source_url):
                 continue
 
             results.append(
@@ -230,24 +241,40 @@ class AllAnimeScraper(AnimeScraper):
                     url=source_url,
                     source=source_name,
                     quality=None,
-                    type=None,
+                    type=self._infer_stream_type(source_url),
                 )
             )
+
+        results.sort(
+            key=lambda stream: _SOURCE_PRIORITY.get(stream.source or "", 0),
+            reverse=True,
+        )
 
         return results
 
     def _decrypt_tobeparsed(self, tobeparsed: str) -> dict:
         padding = (4 - len(tobeparsed) % 4) % 4
         raw = base64.b64decode(tobeparsed + "=" * padding)
+
         key = hashlib.sha256(b"Xot36i3lK3:v1").digest()
         nonce = raw[1:13]
         ctr_iv = bytes.fromhex(nonce.hex() + "00000002")
         ct_len = len(raw) - 13 - 16
-        plaintext = AES.new(key, AES.MODE_CTR, initial_value=ctr_iv, nonce=b"").decrypt(raw[13 : 13 + ct_len])
+
+        plaintext = AES.new(
+            key,
+            AES.MODE_CTR,
+            initial_value=ctr_iv,
+            nonce=b"",
+        ).decrypt(raw[13 : 13 + ct_len])
+
         return json.loads(plaintext)
 
     def _decode_xor_url(self, hex_str: str) -> str:
-        return bytes([int(hex_str[i : i + 2], 16) ^ 56 for i in range(0, len(hex_str), 2)]).decode("utf-8", errors="ignore")
+        return bytes(
+            int(hex_str[index : index + 2], 16) ^ 56
+            for index in range(0, len(hex_str), 2)
+        ).decode("utf-8", errors="ignore")
 
     def _has_stream_data(self, data: dict) -> bool:
         episode = data.get("data", {}).get("episode")
@@ -258,3 +285,48 @@ class AllAnimeScraper(AnimeScraper):
         source_urls = episode.get("sourceUrls")
 
         return isinstance(source_urls, list) and len(source_urls) > 0
+
+    def _is_probably_playable_url(self, url: str) -> bool:
+        if not url.startswith(("http://", "https://")):
+            return False
+
+        lowered_url = url.lower()
+
+        blocked_fragments = (
+            "doubleclick",
+            "googlesyndication",
+            "googleads",
+            "adservice",
+            "popads",
+            "analytics",
+        )
+
+        if any(fragment in lowered_url for fragment in blocked_fragments):
+            return False
+
+        playable_fragments = (
+            ".m3u8",
+            ".mp4",
+            "streaming.php",
+            "/embed",
+            "/e/",
+            "videoembed",
+            "tools.fast4speed.rsvp",
+            "mp4upload.com",
+            "streamsb",
+            "ok.ru",
+            "vidstreaming",
+        )
+
+        return any(fragment in lowered_url for fragment in playable_fragments)
+
+    def _infer_stream_type(self, url: str) -> str:
+        lowered_url = url.lower()
+
+        if ".m3u8" in lowered_url:
+            return "hls"
+
+        if ".mp4" in lowered_url:
+            return "mp4"
+
+        return "embed"
