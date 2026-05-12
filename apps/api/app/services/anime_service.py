@@ -1,11 +1,8 @@
 from app.schemas.anime import AnimeSearchResult
+from app.scrapers.mock import MockAnimeScraper
+
+scraper = MockAnimeScraper()
+
 
 async def search_anime(query: str) -> list[AnimeSearchResult]:
-    return [
-        AnimeSearchResult(
-            id=query.lower().replace(" ", "-"),
-            title=f"{query}",
-            image=None,
-            year=None,
-        ),
-    ]
+    return await scraper.search(query)
