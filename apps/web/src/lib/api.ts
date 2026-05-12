@@ -8,6 +8,10 @@ export type AnimeSearchResult = {
   year: number | null;
 };
 
+export type AnimeEpisode = {
+  number: string;
+};
+
 export const API = {
   getHealth: async () => {
     const response = await fetch(`${API_BASE_URL}/health`);
@@ -25,6 +29,22 @@ export const API = {
 
     if (!response.ok) {
       throw new Error("Failed to search anime");
+    }
+
+    return response.json();
+  },
+  getEpisodes: async (
+    animeId: string,
+    translationType: "sub" | "dub" = "sub",
+  ): Promise<AnimeEpisode[]> => {
+    const params = new URLSearchParams({ translation_type: translationType });
+
+    const response = await fetch(
+      `${API_BASE_URL}/anime/${animeId}/episodes?${params.toString()}`,
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch episodes");
     }
 
     return response.json();
