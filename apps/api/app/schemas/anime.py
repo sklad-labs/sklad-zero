@@ -5,6 +5,7 @@ class AnimeSearchResult(BaseModel):
     title: str
     image: str | None = None
     year: int | None = None
+    episode_count: int | None = None
 
 class AnimeEpisode(BaseModel):
     number: str

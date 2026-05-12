@@ -107,8 +107,51 @@ class AllAnimeScraper(AnimeScraper):
             response.raise_for_status()
             data = response.json()
 
-        return self._parse_search_response(data)
+        return self._parse_search_response(data, query)
+    def _get_episode_count(self, available_episodes: dict) -> int | None:
+        if not isinstance(available_episodes, dict):
+            return None
 
+        counts: list[int] = []
+
+        for value in available_episodes.values():
+            if isinstance(value, int):
+                counts.append(value)
+            elif isinstance(value, list):
+                counts.append(len(value))
+
+        if not counts:
+            return None
+
+        return max(counts)
+
+
+    def _sort_search_results(
+        self,
+        results: list[AnimeSearchResult],
+        query: str,
+    ) -> list[AnimeSearchResult]:
+        normalized_query = query.lower().strip()
+
+        def score(result: AnimeSearchResult) -> tuple[int, int, int, int, int]:
+            normalized_title = result.title.lower().strip()
+
+            exact_match = int(normalized_title == normalized_query)
+            starts_with_query = int(normalized_title.startswith(normalized_query))
+            contains_query = int(normalized_query in normalized_title)
+            episode_count = result.episode_count or 0
+            shorter_title_score = -len(normalized_title)
+
+            return (
+                exact_match,
+                starts_with_query,
+                contains_query,
+                episode_count,
+                shorter_title_score,
+            )
+
+        return sorted(results, key=score, reverse=True)
+    
     async def get_episodes(
         self,
         anime_id: str,
@@ -184,7 +227,11 @@ class AllAnimeScraper(AnimeScraper):
 
         return []
 
-    def _parse_search_response(self, data: dict) -> list[AnimeSearchResult]:
+    def _parse_search_response(
+        self,
+        data: dict,
+        query: str,
+    ) -> list[AnimeSearchResult]:
         edges = data.get("data", {}).get("shows", {}).get("edges", [])
 
         results: list[AnimeSearchResult] = []
@@ -195,6 +242,7 @@ class AllAnimeScraper(AnimeScraper):
 
             anime_id = item.get("_id")
             title = item.get("name")
+            available_episodes = item.get("availableEpisodes") or {}
 
             if not anime_id or not title:
                 continue
@@ -205,11 +253,12 @@ class AllAnimeScraper(AnimeScraper):
                     title=title,
                     image=None,
                     year=None,
+                    episode_count=self._get_episode_count(available_episodes),
                 )
             )
 
-        return results
-
+        return self._sort_search_results(results, query)
+    
     def _parse_stream_response(self, data: dict) -> list[AnimeStreamSource]:
         episode = data.get("data", {}).get("episode")
 

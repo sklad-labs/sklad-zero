@@ -6,6 +6,7 @@ export type AnimeSearchResult = {
   title: string;
   image: string | null;
   year: number | null;
+  episode_count: number | null;
 };
 
 export type AnimeEpisode = {

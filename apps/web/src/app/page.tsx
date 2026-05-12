@@ -179,7 +179,11 @@ export default function Home() {
                   </div>
 
                   <p className="mt-1 text-xs text-zinc-500">ID: {anime.id}</p>
-
+                  {anime.episode_count && (
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Episodes: {anime.episode_count}
+                    </p>
+                  )}
                   {anime.year && (
                     <p className="mt-1 text-sm text-zinc-400">
                       Year: {anime.year}
