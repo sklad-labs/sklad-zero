@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routes.search import router as search_router
 
 app = FastAPI(
     title="Sklad Zero API",
@@ -15,6 +16,7 @@ app.add_middleware(
     allow_methods=["*"],
 )
 
+app.include_router(search_router)
 
 @app.get("/health")
 async def health_check():
