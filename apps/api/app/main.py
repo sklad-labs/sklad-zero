@@ -1,7 +1,21 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes.search import router as search_router
+
 from app.routes.anime import router as anime_router
+from app.routes.search import router as search_router
+
+
+def get_cors_origins() -> list[str]:
+    raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+
+    return [
+        origin.strip()
+        for origin in raw_origins.split(",")
+        if origin.strip()
+    ]
+
 
 app = FastAPI(
     title="Sklad Zero API",
@@ -11,7 +25,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_headers=["*"],
     allow_methods=["*"],
@@ -19,6 +33,7 @@ app.add_middleware(
 
 app.include_router(search_router)
 app.include_router(anime_router)
+
 
 @app.get("/health")
 async def health_check():
